@@ -1,0 +1,6 @@
+﻿,Best,Average,Worst
+BubbleSort,Sorted: 0.0s,Random: 15.9s,Random: 15.6s
+InsertionSort,Sorted: 0.0s,Random: 5.5s,Reverse: 10.2s
+SelectionSort,Sorted: 4.3s,Random: 5.3s,Random: 5.3s
+MergeSort,Reverse: 0.01s,Random: 0.06s,Random: 0.06s
+QuickSort,Random: 0.01s,Random: 0.01s,Reverse: 5.05s
