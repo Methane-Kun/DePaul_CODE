@@ -1,0 +1,74 @@
+@startuml
+class Factory{
+    -lines: Line
+    +getLines(line:Line): Enumeration
+    +putLine(): void
+}
+class Line{
+    -name: String
+    -type: String
+    +setName(name:String): void
+    +getName(): String
+    +setType(type:String): void
+    +getType(): String
+    +equpFurinture(furniture:Furniture,component:Component) void
+}
+class Furniture{
+    -type: String
+    -ref: String
+    -price: double
+    -components: Component
+    +setType(type:String): void
+    +getType(): String
+    +setRef(ref:String): void
+    +getRef(): String
+    +setPrice(price:double)): void
+    +getPrice(): double
+    +setComponents(component:Component): void
+    +getComponents(): Enumeration
+}
+class Component{
+    -code: int
+    -price: double
+    -type: String
+    +setCode(code:int)
+    +getCode(): int
+    +setPrice(price:double): void
+    +getPrice(): double
+    +setType(type:String): void
+    +getType(): String
+}
+class Store{
+    -address: String
+    -fax: String
+    -furniture: Furniture
+    -orders: Order
+    +setAddress(address:String): void
+    +getAddress(): String
+    +setFax(dax:String): void
+    +getFax(): String
+    +putFurniture(furniture:Furniture): void
+    +getFurniture(): Enumeration
+    +putOrder(order:Order): void
+    +getOrders(): Enumeration
+}
+class Order{
+    -num: int
+    -date: String
+    -types: final int
+    -Cnts: int[types]
+    +setNum(num:int): void
+    +getNum(): int
+    +setDate(date:String): void
+    +getDate(): String
+    +setCnts(cnt:int): void
+    +getCnts(): int[types]
+}
+
+Factory "1" *-- "1..*" Line
+Line "1" ..> "*" Furniture
+Line "1" .> "*" Component
+Furniture "1" o-- "*" Component
+Store "1" -> "*" Furniture
+Store "1" --> "*" Order
+@enduml

@@ -6,3 +6,4 @@ DePaul Univ. Code &amp; hw
 - CSC481 Introduce to Image Processing
 - CSC406 System I
 - CSC407 System II
+- SE450 Object Orented Design
