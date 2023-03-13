@@ -8,5 +8,4 @@ DePaul Univ. Code &amp; hw
 - CSC407 System II
 - CSC447 Concept of Programming Languages
 - CSC453 DBMS
-- SE450 Object Orented Design
-- SE480 Software Arhitecture
+- SE450 Object-Oriented Design
