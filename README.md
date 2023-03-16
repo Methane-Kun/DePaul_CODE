@@ -9,3 +9,4 @@ DePaul Univ. Code &amp; hw
 - CSC447 Concept of Programming Languages
 - CSC453 DBMS
 - SE450 Object-Oriented Design
+- CSC453 Principle of Database Management Systems
