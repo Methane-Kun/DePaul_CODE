@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en-US">
+
+ <head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <title>CSC 407: Computer Systems II: 2023 Winter, Assignment #4</title>
+ </head>
+
+ <body>
+  <center>
+  <h2>CSC 407: Computer Systems II: 2023 Winter, Assignment #4</h2>
+  <p>Last Modified 2023 March 2</p>
+  </center>
+
+  <h4>Purpose:</h4>
+  To practice:
+  <ul>
+    <li>Sockets</li>
+    <li>Low-level I/O in C</li>
+    <li>Detached threads</li>
+  </ul>
+
+  <h4>Assignment:</h4>
+  <p>
+    Please finish the server of a client-server application.
+    The client asks the user for a filename.
+    The client sends the string length of the filename (plus 1, for the nul char)
+    to the server.
+    This length is an integer in network endian.
+    Then the server sends the filename (including the nul char).
+  </p>
+
+  <p>
+    The server makes a new thread for each client.<br/>
+    In a loop, that client-handling server thread
+    gets the length of the filename from the client.
+    It converts it to its own endian, then it gets the filename.
+    The server attempts to open the file.
+    <ul>
+      <li>
+	If it cannot open then it sends the string
+	<bold><pre>&quot;Cannot open file&quot;</pre></bold>
+	back to the client.
+      </li>
+      <li>
+	If it can open the file then it makes a child process.
+	<p>
+	  The child process:
+	  <ul>
+	    <li>redirects its <code>STDIN_FILENO</code> to come from the file it just opened</li>
+	    <li>redirects its <code>STDOUT_FILENO</code> to go to the socket used to communicate with the client</li>
+	    <li>
+	      runs the program named <code>WC_APP_PATH</code> that outputs
+	      <ul>
+		<li>The number of lines</li>
+		<li>The number of words</li>
+		<li>The number of characters</li>
+	      </ul>
+	      as 3 integers on the same line.
+	    </li>
+	  </ul>
+	</p>
+	<p>
+	  The parent process <code>close()</code>s the file after it
+	  successfully make the child,
+	  and the parent makes sure the child does not remain a zombie.
+	</p>
+      </li>
+    </ul>
+  </p>
+
+  <p>
+    When the client sends the empty string to the server
+    that tells the client-handling thread on the server to end.
+  </p>
+
+  <ol type="A">
+    <li>
+      <h4>doServer():</h4>
+      <ol type="1">
+	<li>
+	  Before the loop initialize <code>attr</code>
+	  and then sets it for detached threads.
+	</li>
+	<li>
+	  Inside the loop it <code>accept()</code>s a connect from the client.
+	  Then, it <code>calloc()</code>s space for two integers,
+	  and puts the file descriptor for talking to the client and the
+	  thread-counting integer <code>i</code> in that space.
+	  It creates a detached thread to do <code>handleClient()</code>,
+	  and passes the memory to it.
+	  Finally, it increments <code>i</code>.
+	</li>
+	<li>
+	  After the loop it gets rid of <code>attr</code>.
+	</li>
+      </ol>
+    </li>
+    <p/>
+
+    <li>
+      <h4>handleClient():</h4>
+      <ol type="1">
+	<li>
+	  Get the file descriptor from the passed memory.
+	  (You will have to cast the <code>void*</code> pointer to <code>int*</code>,
+	  and then get the passed integers.)
+	  After getting the file descriptor and thread number,
+	  <code>free()</code> the memory.
+	</li>
+	<li>
+	  It has a loop that:
+	  <ol type="a">
+	    <li>Gets a filename length (in network endian) from the client</li>
+	    <Li>Converts this length to its own endian</li>
+	    <li>Gets the filename from the client.</li>
+	    <li>If the filename is not the empty string then runs <code>runWc()</code></li>
+	  </ol>
+	</li>
+	<li>
+	  After the loop it <code>close()</code>s the file descriptor for
+	  talking with the client, and quits.
+	</li>
+      </ol>
+    </li>
+    <p/>
+
+    <li>
+      <h4>runWc():</h4>
+      <ol type="1">
+	<li>
+	  Attempts to open the file.
+	</li>
+	<li>
+	  If the file can <strong>not</strong> be opened,
+	  then it sends <bold><pre>&quot;Cannot open file&quot;</pre></bold>
+	  back to the client.
+	</li>
+        <li>
+	  However, if it can open the file then it makes a child process.
+	  <p>
+	    The child process:
+	    <ul>
+	      <li>redirects its <code>STDIN_FILENO</code> to come from the file it just opened</li>
+	      <li>redirects its <code>STDOUT_FILENO</code> to go to the socket used to communicate with the client</li>
+	      <li>
+	        runs the program named <code>WC_APP_PATH</code>.
+	      </li>
+	    </ul>
+	  </p>
+	  <p>
+	    The parent process <code>close()</code>s the file after it
+	    successfully make the child,
+	    and the parent makes sure the child does not remain a zombie.
+	  </p>
+        </li>
+      </ol>
+    </li>
+  </ol>
+  <p/>
+
+  <h4>Code:</h4>
+  <pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		wcApp.h							---*
+ *---									---*
+ *---	    This file declares constants common to both the client and	---*
+ *---	server of an application where the client asks the user for a	---*
+ *---	filename, which it sends to the server.  The server runs	---*
+ *---	&apos;wc&apos; on the file and sends the result back to the client.	---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1.0					Joseph Phillips	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+
+/*---		Header file inclusion					---*/
+
+#include	&lt;stdlib.h&gt;
+#include	&lt;stdio.h&gt;
+#include	&lt;string.h&gt;
+#include	&lt;unistd.h&gt;	// read(), write()
+#include	&lt;sys/socket.h&gt;	// For socket()
+#include	&lt;netinet/in.h&gt;	// For sockaddr_in and htons()
+#include	&lt;netdb.h&gt;	// For getaddrinfo()
+#include	&lt;errno.h&gt;	// For errno var
+#include	&lt;sys/stat.h&gt;	// For open(), read(),write(), stat()
+#include	&lt;fcntl.h&gt;	// and close()
+#include	&lt;wait.h&gt;	// For wait()
+
+
+/*---		Definition of constants:				---*/
+
+const int	BUFFER_LEN		= 1024;
+#define		DEFAULT_HOSTNAME	&quot;localhost&quot;
+#define		WC_APP_PATH		&quot;/usr/bin/wc&quot;
+
+
+
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		wc_client.c						---*
+ *---									---*
+ *---	    This file defines a C program that asks the user for a	---*
+ *---	filename, which it sends to the server.  The server runs &apos;wc&apos;	---*
+ *---	on the file and sends the output back to the client.		---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1.0					Joseph Phillips	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+//	Compile with:
+//	$ gcc wc_client.c -o wc_client
+
+/*---		Header file inclusion					---*/
+
+#include	&quot;wcApp.h&quot;
+#include	&lt;unistd.h&gt;	// open, close, read, write
+
+
+
+//  PURPOSE:  To ask the user for the name and the port of the server.  The
+//	server name is returned in &apos;url&apos; up to length &apos;urlLen&apos;.  The port
+//	number is returned in &apos;*portPtr&apos;.  No return value.
+void	obtainUrlAndPort	(int		urlLen,
+				 char*		url,
+				 int*		portPtr
+				)
+{
+  //  I.  Application validity check:
+  if  ( (url == NULL)  ||  (portPtr == NULL) )
+  {
+    fprintf(stderr,&quot;BUG: NULL ptr to obtainUrlAndPort()\n&quot;);
+    exit(EXIT_FAILURE);
+  }
+
+  if   (urlLen &lt;= 1)
+  {
+    fprintf(stderr,&quot;BUG: Bad string length to obtainUrlAndPort()\n&quot;);
+    exit(EXIT_FAILURE);
+  }
+
+  //  II.  Get server name and port number:
+  //  II.A.  Get server name:
+  printf(&quot;Machine name [%s]? &quot;,DEFAULT_HOSTNAME);
+  fgets(url,urlLen,stdin);
+
+  char*	cPtr	= strchr(url,&apos;\n&apos;);
+
+  if  (cPtr != NULL)
+    *cPtr = &apos;\0&apos;;
+
+  if  (url[0] == &apos;\0&apos;)
+    strncpy(url,DEFAULT_HOSTNAME,urlLen);
+
+  //  II.B.  Get port numbe:
+  char	buffer[BUFFER_LEN];
+
+  printf(&quot;Port number? &quot;);
+  fgets(buffer,BUFFER_LEN,stdin);
+
+  *portPtr = strtol(buffer,NULL,10);
+
+  //  III.  Finished:
+}
+
+
+//  PURPOSE:  To attempt to connect to the server named &apos;url&apos; at port &apos;port&apos;.
+//	Returns file-descriptor of socket if successful, or &apos;-1&apos; otherwise.
+int	attemptToConnectToServer	(const char*	url,
+					 int		port
+					)
+{
+  //  I.  Application validity check:
+  if  (url == NULL)
+  {
+    fprintf(stderr,&quot;BUG: NULL ptr to attemptToConnectToServer()\n&quot;);
+    exit(EXIT_FAILURE);
+  }
+
+
+  //  II.  Attempt to connect to server:
+  //  II.A.  Create a socket:
+  int socketDescriptor = socket(AF_INET, // AF_INET domain
+				SOCK_STREAM, // Reliable TCP
+				0);
+
+  //  II.B.  Ask DNS about &apos;url&apos;:
+  struct addrinfo* hostPtr;
+  int status = getaddrinfo(url,NULL,NULL,&amp;hostPtr);
+
+  if (status != 0)
+  {
+    fprintf(stderr,&quot;%s\n&quot;,gai_strerror(status));
+    return(-1);
+  }
+
+  //  II.C.  Attempt to connect to server:
+  struct sockaddr_in server;
+  // Clear server datastruct
+  memset(&amp;server, 0, sizeof(server));
+
+  // Use TCP/IP
+  server.sin_family = AF_INET;
+
+  // Tell port # in proper network byte order
+  server.sin_port = htons(port);
+
+  // Copy connectivity info from info on server (&quot;hostPtr&quot;)
+  server.sin_addr.s_addr =
+	((struct sockaddr_in*)hostPtr-&gt;ai_addr)-&gt;sin_addr.s_addr;
+
+  status = connect(socketDescriptor,(struct sockaddr*)&amp;server,sizeof(server));
+
+  if  (status &lt; 0)
+  {
+    fprintf(stderr,&quot;Could not connect %s:%d\n&quot;,url,port);
+    return(-1);
+  }
+
+  freeaddrinfo(hostPtr);
+
+  //  III.  Finished:
+  return(socketDescriptor);
+}
+
+
+//  PURPOSE:  To do the work of the application.  Gets letter from user, sends
+//	it to server over file-descriptor &apos;fd&apos;, and either prints text of
+//	returned error code, or prints returned file.  No return value.
+void	communicateWithServer	(int	fd
+				)
+{
+  //  I.  Application validity check:
+
+  //  II.  Do work of application:
+  //  II.A.  Continually ask for filenames, send them and get results:
+  char	buffer[BUFFER_LEN+1];
+  char*	cPtr;
+  int	length;
+  int	lengthInNetEndian;
+
+  while  (1)
+  {
+    //  II.A.1.  Ask for and get name:
+    printf(&quot;Please enter a filename or press Enter to quit: &quot;);
+    fgets(buffer,BUFFER_LEN-1,stdin);
+
+    //  II.A.2.  Remove ending newline:
+    cPtr	= strchr(buffer,&apos;\n&apos;);
+
+    if  (cPtr != NULL)
+      *cPtr	= &apos;\0&apos;;
+
+    //  II.A.3.  Send length and filename:
+    length		= strlen(buffer) + 1;
+    lengthInNetEndian	= htonl(length);
+    write(fd,&amp;lengthInNetEndian,sizeof(int));
+    write(fd,buffer,length);
+
+    //  II.A.4.  Quit loop if requested:
+    if  (buffer[0] == &apos;\0&apos;)
+      break;
+
+    //  II.A.5.  Receive and print results:
+    length		= read(fd,buffer,BUFFER_LEN-1);
+    buffer[length]	= &apos;\0&apos;;
+    printf(&quot;%s\n&quot;,buffer);
+  }
+
+  //  III.  Finished:
+}
+
+
+//  PURPOSE:  To do the work of the client.  Ignores command line parameters.
+//	Returns &apos;EXIT_SUCCESS&apos; to OS on success or &apos;EXIT_FAILURE&apos; otherwise.
+int	main	()
+{
+  char		url[BUFFER_LEN];
+  int		port;
+  int		fd;
+
+  obtainUrlAndPort(BUFFER_LEN,url,&amp;port);
+  fd	= attemptToConnectToServer(url,port);
+
+  if  (fd &lt; 0)
+    exit(EXIT_FAILURE);
+
+  communicateWithServer(fd);
+  close(fd);
+  return(EXIT_SUCCESS);
+}
+
+
+
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		wc_server.c						---*
+ *---									---*
+ *---	    This file defines a C program that waits for a client to	---*
+ *---	connect, gets a filelength and filename from the client, runs	---*
+ *---	a child process to wc on that file, and sends the result back	---*
+ *---	to the client.							---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1a					Joseph Phillips	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+//	Compile with:
+//	$ gcc wc_server.c -o wc_server -lpthread -g
+
+/*---		Header file inclusion					---*/
+
+#include	&quot;wcApp.h&quot;
+#include	&lt;pthread.h&gt;
+
+const int	LO_LEGAL_PORT	= 1025;
+const int	HI_LEGAL_PORT	= 65535;
+const int	ERROR_FD	= -1;
+const int	NUM_CLIENTS_TO_SERVE
+				= 4;
+
+//  PURPOSE:  To attempt to create and return a file-descriptor for listening
+//	to the OS telling this server when a client process has connect()-ed
+//	to &apos;port&apos;.  Returns that file-descriptor, or &apos;ERROR_FD&apos; on failure.
+int		getServerFileDescriptor
+				(int		port,
+				 const char*	progName
+				)
+{
+  //  I.  Application validity check:
+  if  (progName == NULL)
+  {
+    fprintf(stderr,&quot;BUG: NULL ptr to getServerFileDescriptor().\n&quot;);
+    exit(EXIT_FAILURE);
+  }
+
+  //  II.  Attempt to get socket file descriptor and bind it to &apos;port&apos;:
+  //  II.A.  Create a socket
+  int socketDescriptor = socket(AF_INET, // AF_INET domain
+			        SOCK_STREAM, // Reliable TCP
+			        0);
+
+  if  (socketDescriptor &lt; 0)
+  {
+    perror(progName);
+    return(ERROR_FD);
+  }
+
+  //  II.B.  Attempt to bind &apos;socketDescriptor&apos; to &apos;port&apos;:
+  //  II.B.1.  We&apos;ll fill in this datastruct
+  struct sockaddr_in socketInfo;
+
+  //  II.B.2.  Fill socketInfo with 0&apos;s
+  memset(&amp;socketInfo,&apos;\0&apos;,sizeof(socketInfo));
+
+  //  II.B.3.  Use TCP/IP:
+  socketInfo.sin_family = AF_INET;
+
+  //  II.B.4.  Tell port in network endian with htons()
+  socketInfo.sin_port = htons(port);
+
+  //  II.B.5.  Allow machine to connect to this service
+  socketInfo.sin_addr.s_addr = INADDR_ANY;
+
+  //  II.B.6.  Try to bind socket with port and other specifications
+  int status = bind(socketDescriptor, // from socket()
+		    (struct sockaddr*)&amp;socketInfo,
+		    sizeof(socketInfo)
+		   );
+
+  if  (status &lt; 0)
+  {
+    perror(progName);
+    return(ERROR_FD);
+  }
+
+  //  II.B.6.  Set OS queue length:
+  listen(socketDescriptor,5);
+
+  //  III.  Finished:
+  return(socketDescriptor);
+}
+
+
+//  PURPOSE:  To ask the user which port to attempt to monopolize, and to return
+//	entered port number.
+int		getPort		()
+{
+  //  I.  Application validity check:
+
+  //  II.  Get port number
+  int	port;
+
+  do
+  {
+    char	buffer[BUFFER_LEN];
+
+    printf(&quot;Please enter port number to monopolize [%d-%d]: &quot;,
+	   LO_LEGAL_PORT,HI_LEGAL_PORT
+	  );
+    fgets(buffer,BUFFER_LEN,stdin);
+    port = strtol(buffer,NULL,10);
+  }
+  while  ( (port &lt; LO_LEGAL_PORT)  ||  (port &gt; HI_LEGAL_PORT) );
+
+  //  III.  Finished:
+  return(port);
+}
+
+
+//  PURPOSE:  To make a process that will run &apos;wc&apos; on the file named
+//	&apos;filePathCPtr&apos;, and send that value back to the client via
+//  	file-descriptor &apos;toClient&apos;.  No return value.
+void	runWc			(int		toClient,
+				 const char*	filePathCPtr
+				)
+{
+  //  I.  Application validity check:
+
+  //  II.  Run program and send result back:
+  //  <strong>C. HERE</strong>
+
+  //  III.  Finished:
+}
+
+
+//  PURPOSE:  To do the work of handling the client.  Communication with the
+//	client take place using file-descriptor obtained from &apos;(int*)vPtr&apos;.
+//	Returns &apos;NULL&apos;.
+void*		handleClient	(void*	vPtr
+				)
+{
+  //  I.  Application validity check:
+  int*	argArray	= NULL;	// <strong>CHANGE THAT NULL!</strong>
+  int	fd		= 0;	// <strong>CHANGE THAT 0!</strong>
+  int	threadNum	= 0;	// <strong>CHANGE THAT 0!</strong>
+
+  //  <strong>SOMETHING HERE</strong>
+
+  if  (fd &lt; 0)
+  {
+    fprintf(stderr,&quot;BUG: Illegal file descriptor to handleClient()\n&quot;);
+    return(NULL);
+  }
+
+  //  II.  Handle the client:
+  printf(&quot;Thread %d beginning.\n&quot;,threadNum);
+
+  //  II.A.  Each iteration handles one more file:
+  while  (1)
+  {
+    //  II.A.1.  Get length and then filepath from client:
+    int		length;
+    char	filepath[BUFFER_LEN];
+
+    //  <strong>B.2. HERE</strong>
+
+    if  (filepath[0] == &apos;\0&apos;)
+      break;
+
+    printf(&quot;  %s\n&quot;,filepath);
+
+    //  II.A.2.  Handle request:
+    runWc(fd,filepath);
+  }
+
+  //  III.  Finished:
+  //  <strong>B.3. HERE</strong>
+  printf(&quot;Thread %d ending.\n&quot;,threadNum);
+  return(NULL);
+}
+
+
+//  PURPOSE:  To serve the clients using file-descriptor &apos;listenFd&apos; to tell
+//	when a client has connected.  Each client is handled by its own child
+//	thread.  No return value.
+void	       	doServer  	(int  	 	listenFd
+				)
+{
+  //  I.  Application validity check:
+  if  (listenFd &lt; 0)
+  {
+    fprintf(stderr,&quot;Illegal file-descriptor to doServer()\n&quot;);
+    exit(EXIT_FAILURE);
+  }
+
+  //  II.  Do the work of the server:
+  int			i	= 0;
+  pthread_t		thread;
+  pthread_attr_t	attr;
+
+  //  <strong>YOUR CODE HERE FOR A.1.</strong>
+
+  while  (1)
+  {
+    //  <strong>YOUR CODE HERE FOR A.2.</strong>
+  }
+
+  //  <strong>YOUR CODE HERE FOR A.3.</strong>
+
+  //  III.  Finished:
+}
+
+
+//  PURPOSE:  To oversee the main work of the server.  Ignores &apos;argc&apos; but
+//	uses &apos;argv[0]&apos; as the name of the program.  Returns &apos;EXIT_SUCCESS&apos; to
+//	OS on success or &apos;EXIT_FAILURE&apos; otherwise.
+int		main		(int		argc,
+				 char*		argv[]
+				)
+{
+  //  I.  Application validity check:
+
+  //  II.  Do server:
+  int	port		= getPort();
+  int	socketFd	= getServerFileDescriptor(port,argv[0]);
+
+  doServer(socketFd);
+  close(socketFd);
+
+  //  III.  Finished:
+  return(EXIT_SUCCESS);
+}
+  </pre>
+
+  <h4>Sample output:</h4>
+  <p>
+    I made a file named <code>hello.txt</code> that just says:
+<pre>Hello
+</pre>
+    There is no file named <code>no file</code>.
+  </p>
+
+  <table>
+    <tr>
+      <th>Client output:</th>
+      <th>Server output:</th>
+    </tr>
+    <tr>
+      <td>
+	<pre>
+	</pre>
+      </td>
+      <td>
+	<pre>
+$ <strong>./server </strong>
+Please enter port number to monopolize [1025-65535]: <strong>1025</strong>
+Thread 0 beginning.
+	</pre>
+      </td>
+    </tr>
+    <tr>
+      <td>
+	<pre>
+$ <strong>./client </strong>
+Machine name [localhost]? <strong>(I just pressed enter) </strong>
+Port number? <strong>1025</strong>
+Please enter a filename or press Enter to quit: <strong>hello.txt</strong>
+1 1 6
+</pre>
+      </td>
+      <td>
+	There is a file <code>hello.txt</code> so its result is sent back:
+	<pre>
+  hello.txt
+	</pre>
+      </td>
+    </tr>
+    <tr>
+      <td>
+	<pre>
+Please enter a filename or press Enter to quit: <strong>no file</strong>
+Cannot open file</pre>
+      </td>
+      <td>
+	There is no file named <code>no file</code> so the error message is sent:
+	<pre>
+  no file
+	</pre>
+      </td>
+    </tr>
+    <tr>
+      <td>
+	<pre>
+Please enter a filename or press Enter to quit: <strong>(I just pressed enter) </strong>
+$ 
+	</pre>
+      </td>
+      <td>
+	Empty string tells client-handling thread to quit
+	<pre>
+Thread 0 ending.
+	</pre>
+      </td>
+    </tr>
+  </table>
+
+ </body>
+</html>

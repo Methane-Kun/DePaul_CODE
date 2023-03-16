@@ -1,0 +1,46 @@
+-- Kun Shan
+QEd1. Where does the critical section begin?
+A: It should start in the beginning of the second while loop.
+
+QEd2. Where does the critical section end?
+A: It should end on the last part of this function, before III. Finished.
+
+QF1. How well did your program work before making it thread safe?
+A: Those four threads will run a very long work individually.
+
+Output shows blow:
+    ./buyTheCandy 
+    ...
+    Alice: "I want candy!  Let's put our money together!"
+    Bob: "I want candy!  Let's put our money together!"
+    ...
+    Bob: "I want candy!  Let's put our money together!"
+    Alice: "I want candy!  Let's put our money together!"
+    ...
+    Alice: "I want candy!  Let's put our money together!"
+    Cathy: "I want candy!  Let's put our money together!"
+    Cathy: "I added my money."
+    Bob: "I want candy!  Let's put our money together!"
+    Bob: "I added my money."
+    Alice: "I want candy!  Let's put our money together!"
+    Alice: "I added my money."
+    All: "We have 173 cents.  Yay!  We can afford the candy!"
+
+QF2. How well did your program work after making it thread safe?
+A: Each thread will wait until other thread finished their job, 
+    it seem like ordered and clean!
+
+Output shows blow:
+    ./buyTheCandy 
+    Alice has 4 coins worth 21 cents.
+    Bob has 4 coins worth 45 cents.
+    Cathy has 4 coins worth 17 cents.
+    David has 4 coins worth 45 cents.
+    Alice: "I want candy!  Let's put our money together!"
+    Bob: "I want candy!  Let's put our money together!"
+    Cathy: "I want candy!  Let's put our money together!"
+    David: "I added my money."
+    Cathy: "I added my money."
+    Bob: "I added my money."
+    Alice: "I added my money."
+    All: "We have 128 cents.  Yay!  We can afford the candy!"

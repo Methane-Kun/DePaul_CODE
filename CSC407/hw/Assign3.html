@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en_US">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8"> 
+    <title>CSC 407: Computer Systems II: 2023 Winter, Assignment #3</title>
+    <style>
+      H2 { text-align: center }
+      H3 { text-align: center }
+    </style>
+  </head>
+
+  <body>
+    <h2>CSC 407: Computer Systems II: 2023 Winter<br/>Assignment #3</h2>
+    <h3>Last Modified 2023 February 17</h3>
+
+    <h4>Purpose:</h4>
+    To go over:
+    <ul>
+      <li>Threads</li>
+      <li>Memory management</li>
+    </ul>
+
+    <h4>Computing</h4>
+    <p>
+      Please <a href="http://www.putty.org/">ssh</a> into one of the following:
+      <ul>
+	<li>cdmlsrvprd01.dpu.depaul.edu</li>
+      </ul>
+      or use your own Unix machine.
+    </p>
+
+    <p>
+      Please submit the source file <code>buyTheCandy.cpp</code>
+    </p>
+
+    <ol type="1">
+      <li>
+	<h4>buyTheCandy.cpp (100 Points)</h4>
+	<ol type="A">
+	  <li>
+	    <h5>Overview:</h5>
+	    <p>
+	      A package of 4 candy candies cost 100 cents.
+	      (It can be 1 USD, 1 Euro, 1 whatever).
+	      Four siblings (brothers or sisters) want a candy,
+	      and each has some money.
+	      Unfortunately, probably none of the siblings has enough money to buy the candies by themself.
+	      So they will all pool their money and jointly buy the candy.
+	    </p>
+	    <p>
+	      There are 3 classes:
+	      <ul>
+		<li><code>Coin</code>: Represents some money</li>
+		<li>
+		  <code>Purse</code>: Implements a container
+		  (a linked list) of <code>Coin</code> instances.
+		</li>
+		<li>
+		  <code>CommonPurse</code>: a thread-safe version of <code>Purse</code>
+		</li>
+	      </ul>
+	    </p>
+	    <p>
+	      Each sibling has their money in a <code>Purse</code> instance.
+	      Additionally, there is a <code>CommonPurse</code> called <code>sharedPurse</code> to which all siblings will add their money.
+	      Because each sibling is implemented with its own thread, the individual <code>Purse</code> instances do not need to be thread safe.
+	      However, <code>sharedPurse</code> needs to be made thread-safe because all four threads can access it.
+	    </p>
+	  </li>
+	  <p/>
+
+	  <li>
+	    <h5>Cut-and-paste the following:</h5>
+	    <pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		buyTheCandy.cpp						---*
+ *---									---*
+ *---	    This file defines a program that exercises linked list and	---*
+ *---	threading skills by simulating 4 children pooling their money	---*
+ *---	to buy a pack of candy.						---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 9a					Joseph Phillips	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+/*
+ *	$ g++ -lpthread -g buyTheCandy.cpp -o buyTheCandy
+ */
+
+//--			    Standard inclusions:			--//
+
+#include	&lt;cstdlib&gt;
+#include	&lt;cstdio&gt;
+#include	&lt;unistd.h&gt;
+#include	&lt;pthread.h&gt;
+
+
+//--				Constants:				--//
+
+//  PURPOSE:  To the names of the children
+const char*   	CHILD_NAME_ARRAY[]
+				= {&quot;Alice&quot;,
+				   &quot;Bob&quot;,
+				   &quot;Cathy&quot;,
+				   &quot;David&quot;
+				  };
+
+//  PURPOSE:  To tell the number of children.
+const int	NUM_CHILDREN	= sizeof(CHILD_NAME_ARRAY)/sizeof(const char*);
+
+//  PURPOSE:  To tell the possible denominations of the Coin instances.
+const int	COIN_DENOMINATION_ARRAY[]
+				= {1,5,10,25};
+
+//  PURPOSE:  To tell the number of coins in each new Purse.
+const int	NUM_COINS_PER_NEW_PURSE
+				= 4;
+
+//  PURPOSE:  To tell the number of denominations.
+const int     	NUM_DENOMINATIONS
+				= sizeof(COIN_DENOMINATION_ARRAY)/sizeof(int);
+
+//  PURPOSE:  To tell how much money needs to be collected to buy the candy.
+const int	CANDY_COST	= 100;
+
+//--				Classes:				--//
+
+//  PURPOSE:  To represent coins.
+class		Coin
+{
+  //  I.  Member vars:
+  //  PURPOSE:  To tell the denomination of &apos;*this&apos; Coin instance.
+  int				denomination_;
+
+  //  PURPOSE:  To hold the address of the next Coin after &apos;*this&apos; one,
+  //  	or &apos;NULL&apos; if there is no such Coin instance.
+  Coin*				nextPtr_;
+
+  //  II.  Disallowed auto-generated methods:
+  //  No default constructor:
+  Coin				();
+
+  //  No copy constructor:
+  Coin				(const Coin&amp;);
+
+  //  No copy assignment op:
+  Coin		operator=	(const Coin&amp;);
+
+protected :
+  //  III.  Protected methods:
+
+public :
+  //  IV.  Constructor(s), assignment op(s), factory(s) and destructor:
+  //  PURPOSE:  To make a coin of denomination &apos;newDom&apos;.  No return value.
+  Coin				(int	newDom
+				) :
+				denomination_(newDom),
+				nextPtr_(NULL)
+				{ }
+
+  //  PURPOSE:  To release the resources of &apos;*this&apos;.  No parameters.
+  //  	No return value.
+  ~Coin				()
+				{
+				}
+
+  //  V.  Accessors:
+  //  PURPOSE:  To return the denomination of &apos;*this&apos; Coin instance.
+  //	No parameters.
+  int		getDenomination	()
+  				const
+				{ return(denomination_); }
+
+  //  PURPOSE:  To return the address of the next Coin after &apos;*this&apos; one,
+  //  	or &apos;NULL&apos; if there is no such Coin instance.  No parameters.
+  Coin*		getNextPtr	()
+				const
+				{ return(nextPtr_); }
+
+  //  VI.  Mutators:
+  //  PURPOSE:  To note that the Coin instance with address &apos;coinPtr&apos; comes
+  //  	after &apos;*this&apos; one.  No return value.
+  void	      	setNextPtr     	(Coin*	coinPtr
+				)
+				{
+				  nextPtr_	= coinPtr;
+				}
+
+  //  VII.  Methods that do main and misc work of class:
+  //  PURPOSE:  To create and return the address of a random coin.
+  //	No parameters.
+  static
+  Coin*		makeRandom	()
+  {
+    //  I.  Application validity check:
+
+    //  II.  Create and return a coin:
+    return(new Coin(COIN_DENOMINATION_ARRAY[rand() % NUM_DENOMINATIONS]));
+  }
+
+};
+
+
+
+
+//  PURPOSE:  To implement a list of Coin instances.
+class		Purse
+{
+  //  0.  Constants:
+  enum
+  {
+    NO_OWNER_INDEX		= -1
+  };
+
+  //  I.  Member var:
+  //  PURPOSE:  To hold the index of the name of the owner of &apos;*this&apos; Purse
+  //	instance, or &apos;NO_OWNER_INDEX&apos; if &apos;*this&apos; has no owner.
+  int				index_;
+
+  <strong>//  ADD YOUR VARIABLES HERE</strong>
+
+  //  II.  Disallowed auto-generated methods:
+  //  No copy constructor:
+  Purse				(const Purse&amp;);
+
+  //  No copy-assignment op:
+  Purse		operator=	(const Purse&amp;);
+
+protected :
+  //  III.  Protected methods:
+
+public :
+  //  IV.  Constructor(s), assignment op(s), factory(s) and destructor:
+  //  PURPOSE:  To initialize &apos;*this&apos; to an empty purse
+  Purse				() :
+				index_(NO_OWNER_INDEX)
+  {
+    <strong>//  INITIALIZE YOUR VARS HERE</strong>
+  }
+
+
+  //  PURPOSE:  To initialize &apos;*this&apos; Purse instance to have
+  //	NUM_COINS_PER_NEW_PURSE random Coin instances owned by the child with
+  //	index &apos;newIndex&apos;.  No return value.
+  Purse				(int		newIndex
+  				) :
+				index_(newIndex)
+  {
+    <strong>//  INITIALIZE YOUR VARS HERE</strong>
+
+    for  (int i = 0;  i &lt; NUM_COINS_PER_NEW_PURSE;  i++)
+    {
+      addToBack(Coin::makeRandom());
+    }
+  }
+
+
+  //  PURPOSE:  To release the resources of &apos;*this&apos;.  No parameters.
+  //  	No return value.
+  ~Purse			()
+  {
+    Coin*	run;
+    Coin*	nextPtr;
+
+    <strong>//  GET RID OF YOUR VARS HERE</strong>
+
+  }
+
+
+  //  V.  Accessors:
+  //  PURPOSE:  To return the index of the name of the owner of &apos;*this&apos; Purse
+  //	instance, or &apos;NO_OWNER_INDEX&apos; if &apos;*this&apos; has no owner.
+  int		getIndex	()
+				const
+				{ return(index_); }
+
+  //  PURPOSE:  To return the name of the owner of &apos;*this&apos; Purse instance.
+  //	No parameters.
+  const char*	getOwnerNameCPtr()
+				const
+				{
+				  return( (getIndex() == NO_OWNER_INDEX)
+				  	  ? &quot;common&quot;
+					  : CHILD_NAME_ARRAY[getIndex()]
+					);
+				}
+
+  //  PURPOSE:  To return the value of the money in &apos;*this&apos; wallet.
+  //	No parameters.
+  int		getValue	()
+				const
+  {
+    const Coin*	run;
+    int		sum	= 0;
+
+    <strong>//  YOUR CODE HERE</strong>
+
+    return(sum);
+  }
+
+
+  //  PURPOSE:  To tell the number of Coin instances in &apos;*this&apos;.
+  int		getNumCoins	()
+				const
+				{ return(numCoins_); }
+
+  //  VI.  Mutators:
+  //  PURPOSE:  To add the Coin with address &apos;coinPtr&apos; to &apos;*this&apos; Purse.
+  //  	No return value.
+  void		addToBack	(Coin*	coinPtr
+  				)
+  {
+    <strong>//  YOUR CODE HERE</strong>
+  }
+
+  //  PURPOSE:  To remove the Coin at the beginning of &apos;*this&apos; and return
+  //  	its address.  No parameters.
+  Coin*	    	removeFromFront	()
+  {
+    Coin*	returnMe	= NULL;
+
+    <strong>//  YOUR CODE HERE</strong>
+    return(returnMe);
+  }
+
+
+  //  VII.  Methods that do main and misc. work of class:
+  //  PURPOSE:  To print the status of &apos;*this&apos; Purse to &apos;stdout&apos;.
+  //  	No parameters.  No return value.
+  void		print		()
+				const
+  {
+    printf
+	(&quot;%s has %d coins worth %d cents.\n&quot;,
+	 getOwnerNameCPtr(),getNumCoins(),getValue()
+	);
+  }
+
+};
+
+
+//  PURPOSE:  To implement a thread-safe version of Purse.
+class		CommonPurse : public Purse
+{
+  //  I.  Member vars:
+  <strong>//  ADD YOUR VARIABLES HERE</strong>
+
+  //  PURPOSE:  To tell the current turn.
+  int				turn_;
+
+  //  II.  Disallowed auto-generated methods:
+  //  No copy constructor:
+  CommonPurse			(const CommonPurse&amp;);
+
+  //  No copy assignment op:
+  CommonPurse	operator=	(const CommonPurse&amp;);
+
+protected :
+  //  III.  Protected methods:
+
+public :
+  //  IV.  Constructor(s), assignment op(s), factory(s) and destructor:
+  //  PURPOSE:  To initialize &apos;*this&apos; to an empty shared Purse instance.
+  CommonPurse			() :
+				turn_(NUM_CHILDREN-1)
+  {
+    <strong>//  INITIALIZE YOUR VARS HERE</strong>
+  }
+
+  //  PURPOSE:  To release the resources of &apos;*this&apos;.  No parameters.
+  //	No return value.
+  ~CommonPurse			()
+  {
+    <strong>//  GET RID OF YOUR VARS HERE</strong>
+  }
+
+
+  //  V.  Accessors:
+  //  PURPOSE:  To tell the current turn.
+  int		getTurn		()
+  				const
+				{ return(turn_); }
+
+  //  VI.  Mutators:
+
+
+  //  VII.  Methods that do the main and misc. work of class:
+  //  PURPOSE:  To consolidate the Coin instances of &apos;*donorPursePtr&apos; into
+  //	&apos;*this&apos; one.
+  //	(Note to the professional C++ coders: Yeah, I know it is better to use
+  //	 call-by-reference.  I use pointers for consistency.)
+  <strong>//  PUT CODE 3 PLACES IN HERE  . . . I WONDER WHERE?</strong>
+  void		consolidate    	(Purse*		donorPursePtr
+				)
+  {
+    //  I.  Application validity check:
+
+    //  II.  Transfer the wealth:
+
+    while  (getTurn() != donorPursePtr-&gt;getIndex())
+    {
+      printf
+	(&quot;%s: \&quot;I want candy!  Let&apos;s put our money together!\&quot;\n&quot;,
+	 donorPursePtr-&gt;getOwnerNameCPtr()
+	);
+    }
+
+    while  (donorPursePtr-&gt;getNumCoins() &gt; 0)
+    {
+      addToBack(donorPursePtr-&gt;removeFromFront());
+    }
+
+    printf
+	(&quot;%s: \&quot;I added my money.\&quot;\n&quot;,
+	 donorPursePtr-&gt;getOwnerNameCPtr()
+	);
+    turn_--;
+
+    //  III.  Finished:
+  }
+  
+};
+
+
+//--				Global vars:				--//
+
+//  PURPOSE:  To represent the shared, thread-safe Purse instance.
+CommonPurse			sharedPurse;
+
+
+//--				Main functions:				--//
+
+//  PURPOSE:  To add the Coin instances in &apos;*(Purse*)vPtr&apos; to &apos;sharedPurse&apos;.
+//	Returns &apos;NULL&apos;.
+void*		consolidate	(void*	vPtr
+				)
+{
+  Purse*	pursePtr	= NULL;	<strong>// CHANGE THAT NULL</strong>
+
+  <strong>// YOUR CODE HERE</strong>
+  return(NULL);
+}
+
+
+//  PURPOSE:  To have the children add their money to &apos;sharedPurse&apos;, and
+//	then attempt to buy the candy.  Ignores parameters.  Returns
+//	&apos;EXIT_SUCCESS&apos; to OS.
+int		main		()
+{
+  //  I.  Application validity check:
+
+  //  II.  Try to buy candy:
+  //  II.A.  Initialize data-structures:
+  Purse*	pursePtrArray[NUM_CHILDREN];
+
+  srand(getpid());
+
+  for  (int i = 0;  i &lt; NUM_CHILDREN;  i++)
+  {
+    pursePtrArray[i]	= new Purse(i);
+    pursePtrArray[i]-&gt;print();
+  }
+
+  //  II.B.  Consolidate the money:
+  <strong>// YOUR CODE HERE TO START THREADS</strong>
+
+  //  II.C.  Close program down:
+  <strong>// YOUR CODE HERE TO WAIT FOR THREADS</strong>
+
+  for  (int i = 0;  i &lt; NUM_CHILDREN;  i++)
+  {
+    delete(pursePtrArray[i]);
+  }
+
+  printf(&quot;All: \&quot;We have %d cents.  &quot;,sharedPurse.getValue());
+
+  if  (sharedPurse.getValue() &gt;= CANDY_COST)
+  {
+    printf(&quot;Yay!  We can afford the candy!\&quot;\n&quot;);
+  }
+  else
+  {
+    printf(&quot;Time to beg mom for more money!\&quot;\n&quot;);
+  }
+
+  //  III.  Finished:
+  return(EXIT_SUCCESS);
+}
+	    </pre>
+	  </li>
+	  <p/>
+
+	  <li>
+	    <h5>Finish <code>Purse</code>:</h5>
+	    <p>
+	      <code>Purse</code> must implement a linked list of
+	      <code>Coin</code> instances using the <code>Coin</code>
+	      methods <code>getNextPtr()</code> and <code>setNextPtr()</code>.
+	      (<em>No cheating and using C++ containers like
+		<code>std::list</code>, <code>std::vector</code>, etc.</em>)
+	    </p>
+	    <ol type="1">
+	      <li>
+		Give <code>class Purse</code> 3 member variables:
+		<ul>
+		  <li>
+		    A <code>Coin*</code> to point
+		    to the beginning of the list.
+		  </li>
+		  <li>
+		    A <code>Coin*</code> to point
+		    to the end of the list.
+		  </li>
+		  <li>
+		    An <code>int</code> that keeps track of the length
+		    of the list.
+		  </li>
+		</ul>
+	      </li>
+	      <p/>
+
+	      <li>
+		Initialize your variables in the constructor.
+	      </li>
+	      <p/>
+
+	      <li>
+		Get rid of your list in the <em>destructor</em> method:
+		<code>~Purse()</code>.
+		In C one gets memory with <code>malloc()</code> and gives it
+		back with <code>free()</code>.
+		However, in C++ one gets memory and builds an instance of an
+		object with <code>new</code>,
+		and one dismantles the instance with <code>delete()</code>.<br/>
+		Please have a local variable like <code>coinPtr</code>
+		and say <code>delete(coinPtr)</code> for each <code>Coin</code> in the list.
+	      </li>
+	      <p/>
+
+	      <li>
+		Make <code>getValue()</code> loop thru the <code>Coin</code> instances.
+		It should sum all the <code>getDenomination()</code> values of the <code>Coin</code> instances,
+		and <code>return()</code> the sum.
+	      </li>
+	      <p/>
+
+	      <li>
+		Make <code>getNumCoins()</code> returns the how many
+		<code>Coin</code> instances are in the list.
+	      </li>
+	      <p/>
+
+	      <li>
+		Make <code>addToBack()</code> add <code>coinPtr</code> to the back of the list.
+		It should also increment your list-length variable.
+	      </li>
+	      <p/>
+
+	      <li>
+		Make <code>removeFromFront()</code> remove the first <code>Coin</code> instance from the linked list.
+		It should also decrement your list-length variable, and
+		<code>return()</code> the address of the first <code>Coin</code>.
+	      </li>
+	      <p/>
+
+	    </ol>
+	  </li>
+	  <p/>
+
+	  <li>
+	    <h5>Make it multi-threaded:</h5>
+	    <ol type="1">
+	      <li>
+		In <code>main()</code> you will need an array of <code>NUM_CHILDREN</code>
+		<code>pthread_t</code> instances for the bee hive threads.
+		<ol type="a">
+		  <li>
+		    In section <code>II.B</code> declare your array variable.
+		    Have a loop that starts all <code>NUM_CHILDREN</code> threads.
+		    Each thread should run <code>consolidate()</code>,
+		    and pass the address of the corresponding <code>Purse</code> as an argument.
+		  </li>
+		  <li>
+		    In section <code>II.C</code> wait for all child threads to finish.
+		  </li>
+		</ol>		
+	      </li>
+	      <p/>
+
+	      <li>
+		In <code>consolidate()</code>, argument <code>vPtr</code> comes in pointing to a <code>Purse</code>.
+		Set <code>pursePtr</code> equal to <code>vPtr</code>
+		(you will need to cast it).
+		The only thing the function needs to do is run <code>sharedPurse.consolidate(pursePtr)</code>.
+	      </li>
+	      <p/>
+
+	      <li>
+		<strong>Now run it!</strong>
+	      </li>
+	      <p/>
+
+	    </ol>
+	  </li>
+	  <p/>
+
+	  <li>
+	    <h5>Make it thread-safe:</h5>
+	    <p>
+	      Congratulations!
+	      If you got this far you have made it <em>multi-threaded</em>,
+	      but not <em>thread-safe</em>.<br/>
+	      To make it thread-safe you will have to add some
+	      <em>mutex(es)</em> and <em>condition(s)</em>.
+	    </p>
+	    <p>
+	      You need to protect access to the linked list and <code>turn_</code> in <code>CommonPurse</code> method <code>consolidate()</code>.
+	    </p>
+
+	    <ol type="a">
+	      <li>
+		It needs one <code>pthread_mutex_t</code> variable and an array of <code>NUM_CHILDREN+1</code> <code>pthread_cond_t</code> instances.
+	      </li>
+	      <li>
+		Initialize those variables in <code>CommonPurse()</code>.
+	      </li>
+	      <li>
+		Destroy those variables in <code>~CommonPurse()</code>.
+	      </li>
+	      <li>
+		Use them in <code>consolidate()</code> in <code>CommonPurse</code>.<br/>
+		Where does the critical section begin?<br/>
+		Where does the critical section end?<br/>
+		<em>Note:</em> all threads should wait on the <code>pthread_cond_t</code> with index <code>donorPursePtr->getIndex()+1</code>.
+		Also, all threads should signal the <code>pthread_cond_t</code> with index <code>donorPursePtr->getIndex()</code>.
+	      </li>
+	    </ol>
+	  </li>
+	  <p/>
+
+	  <li>
+	    <h5>Questions:</h5>
+	    <p>
+      	      <strong>How well did your program work before making it thread safe?</strong>
+	    </p>
+	    <p>
+      	      <strong>How well did your program work after making it thread safe?</strong>
+	    </p>
+	  </li>
+	  <p/>
+
+	  <li>
+	    <h5>Sample output:</h5>
+	    <pre>
+$ <strong>./buyTheCandy </strong>
+Alice has 4 coins worth 41 cents.
+Bob has 4 coins worth 50 cents.
+Cathy has 4 coins worth 16 cents.
+David has 4 coins worth 50 cents.
+Bob: &quot;I want candy!  Let's put our money together!&quot;
+Cathy: &quot;I want candy!  Let's put our money together!&quot;
+David: &quot;I added my money.&quot;
+Alice: &quot;I want candy!  Let's put our money together!&quot;
+Cathy: &quot;I added my money.&quot;
+Bob: &quot;I added my money.&quot;
+Alice: &quot;I added my money.&quot;
+All: &quot;We have 157 cents.  Yay!  We can afford the candy!&quot;
+$ <strong>./buyTheCandy </strong>
+Alice has 4 coins worth 12 cents.
+Bob has 4 coins worth 36 cents.
+Cathy has 4 coins worth 8 cents.
+David has 4 coins worth 16 cents.
+Alice: &quot;I want candy!  Let's put our money together!&quot;
+Cathy: &quot;I want candy!  Let's put our money together!&quot;
+Bob: &quot;I want candy!  Let's put our money together!&quot;
+David: &quot;I added my money.&quot;
+Cathy: &quot;I added my money.&quot;
+Bob: &quot;I added my money.&quot;
+Alice: &quot;I added my money.&quot;
+All: &quot;We have 72 cents.  Time to beg mom for more money!&quot;
+$ <strong>./buyTheCandy </strong>
+Alice has 4 coins worth 37 cents.
+Bob has 4 coins worth 22 cents.
+Cathy has 4 coins worth 80 cents.
+David has 4 coins worth 21 cents.
+Alice: &quot;I want candy!  Let's put our money together!&quot;
+Bob: &quot;I want candy!  Let's put our money together!&quot;
+David: &quot;I added my money.&quot;
+Cathy: &quot;I added my money.&quot;
+Bob: &quot;I added my money.&quot;
+Alice: &quot;I added my money.&quot;
+All: &quot;We have 160 cents.  Yay!  We can afford the candy!&quot;
+	    </pre>
+	  </li>
+	  <p/>
+	</ol>
+      </li>
+    </ol>
+  </body>
+</html>

@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en_US">
+
+ <head>
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+  <title>CSC 407: Computer Systems II: 2023 Fall, Assignment #2</title>
+ </head>
+
+ <body>
+  <center>
+  <h2>CSC 407: Computer Systems II: 2023 Fall, Assignment #2</h2>
+  <p>Last Modified 2023 February 2</p>
+  </center>
+
+  <h4>Purpose:</h4>
+   To practice creating processes and signal handling.
+
+  <h4>Computing</h4>
+  <p>
+  Please <a href="">ssh</a> into one of the following:
+    <ul>
+      <li>cdmlsrvprd01.dpu.depaul.edu</li>
+    </ul>
+  or use your own Un*x machine (<em>e.g.</em> Linux or MacOS)
+  </p>
+
+  <h4>Overview:</h4>
+  <p>
+    We will finish two programs:
+    <ul>
+      <li>
+	<code>caller.c</code> will make <code>NUM_CHILDREN</code> child processes.
+	Each child process will run <code>responder</code>.
+	Then parent process will send either <code>SIGUSR1</code> or <code>SIGUSR2</code> a randomly-chosen child.
+	The child will either respond with <code>SIGUSR1</code> or <code>SIGUSR2</code>.
+	If the parent receives a different signal than it sent
+	then it records that as a &quot;flip&quot;.
+	The parent then signals a different child process.
+	It continues doing this for 60 seconds.
+	Then it tells all child processes to stop by sending them <code>SIGTERM</code>.
+	At the end it prints each flip probability of each child,
+	and how many times the child actually did flip its signal.
+      </li>
+      <li>
+	Each child process runs <code>responder</code>.
+	It is given a probability on its command line.
+	When it is signaled with either <code>SIGUSR1</code> or <code>SIGUSR2</code>, it sends the other signal to its parent with the given probability.
+	It stops altogether when it receives <code>SIGTERM</code>.
+      </li>
+    </ul>
+  </p>
+
+  <h4>Sample Protocol:</h4>
+  <p>
+<pre>
+caller
+  |
+  | fork/execl
+  |-----------&gt; resp0
+  |               |
+  |               | fork/execl
+  |---------------|-----------&gt; resp1
+  |               |               |
+  |               |               | fork/execl
+  |---------------|---------------|-----------&gt; resp2
+  |               |               |               |
+  |               |               |               | fork/execl
+  |---------------|---------------|---------------|-----------&gt; resp3
+  |               |               |               |               |
+  |               |     SIGUSR1   |               |               |
+  |---------------|--------------&gt;|               |               |
+  |               |     SIGUSR1   |same           |               |
+  |&lt;--------------|---------------|               |               |
+  |               |               |               |               |
+  |               |               |               |               |
+  |               |               |               |               |
+  |               |               |     SIGUSR1   |               |
+  |---------------|---------------|--------------&gt;|               |
+  |               |               |     SIGUSR2   |flip!          |
+  |&lt;--------------|---------------|---------------|               |
+. . .
+</pre>
+  </p>
+
+  <h4>Assignment:</h4>
+  <ol type="1">
+    <li>
+      <h5>caller.c</h5>
+      <pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		caller.c						---*
+ *---									---*
+ *---	    This file defines a program that launches child processes	---*
+ *---	and sends signals to them.					---*
+ *---									---*
+ *---	----	----	----	----	-----	----	----	----	---*
+ *---									---*
+ *---	Version 1a					Joseph Phillips	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+/*
+ *	Compile with:
+ *	$ g++ caller.c -o caller
+ */
+#include	&lt;stdlib.h&gt;
+#include	&lt;stdio.h&gt;
+#include	&lt;string.h&gt;
+#include	&lt;signal.h&gt;
+#include	&lt;unistd.h&gt;
+#include	&lt;wait.h&gt;
+
+const int	NUM_CHILDREN	= 4;
+
+const int	NUM_SECS_TO_RUN	= 60;
+
+const int	TEXT_LEN	= 16;
+
+#define		CHILD_PROCESS	&quot;responder&quot;
+
+pid_t 		childPidArray[NUM_CHILDREN];
+
+float		probabilityArray[NUM_CHILDREN];
+
+int		countArray[NUM_CHILDREN];
+
+int		shouldRun	= 1;
+
+int		lastSignal	= SIGUSR1;
+
+
+//  PURPOSE:  To respond to SIGALRM by telling the process running this program
+//	to stop.  Ignores &apos;sigNum&apos;.  No return value.
+void		sigAlarmHandler	(int		sigNum
+				)
+{
+  <strong>//  YOUR CODE HERE</strong>
+}
+
+
+//  PURPOSE:  To send &apos;sigNum&apos; to the child indexed by &apos;childIndex&apos;.
+//	No return value.
+void		signalChild	(int		childIndex,
+				 int		sigNum
+				)
+{
+  sleep(1);
+  printf(&quot;Sending %s to %d\n&quot;,
+  	 ((sigNum == SIGUSR1) ? &quot;SIGUSR1&quot; : &quot;SIGUSR2&quot;),
+	 childIndex
+	);
+  <strong>//  YOUR CODE HERE</strong>
+}
+
+
+<strong>// ONE OR TWO FUNCTIONS HERE</strong>
+
+
+
+//  PURPOSE:  To install the signal handler(s).  No parameters.  No return
+//	value.
+void		installSignalHandlers
+				()
+{
+  struct sigaction	act;
+
+  <strong>// YOUR CODE HERE</strong>
+}
+
+
+//  PURPOSE:  To initialize &apos;probabilityArray[]&apos; and &apos;countArray[]&apos;.  No
+//	parameters.  No return value.
+void		initializeProbAndCountArrays
+				()
+{
+  int	index;
+
+  for  (index = 0;  index &lt; NUM_CHILDREN;  index++)
+  {
+    probabilityArray[index]	= ((float)(rand() % 256)) / 256.0;
+    countArray[index]		= 0;
+  }
+}
+
+
+//  PURPOSE:  To launch &apos;NUM_CHILDREN&apos; child processes, each of which runs
+//	program &quot;responder&quot;.  No parameters.  No return value.
+void		launchChildren	()
+{
+  int	index;
+
+  <strong>// YOUR CODE HERE</strong>
+}
+
+
+//  PURPOSE:  To send &apos;SIGTERM&apos; to all &apos;NUM_CHILDREN&apos; child processes.  No
+//	parameters.  No return value.
+void		tellChildrenToStop
+				()
+{
+  int	index;
+
+  for  (index = 0;  index &lt; NUM_CHILDREN;  index++)
+  {
+    <strong>// YOUR CODE HERE</strong>
+    printf
+	(&quot;Child %d: prob %g, count %d\n&quot;,
+    	 index,probabilityArray[index],countArray[index]
+	);
+  }
+}
+
+
+int		main		()
+{
+  //  I.  Application validity check:
+
+  //  (Nothing to do)
+
+  //  II.  Run program:
+  srand(getpid());
+
+  //  II.A.  Install signal handler(s):
+  installSignalHandlers();
+
+  //  II.B.  Initialize arrays and launch children:
+  initializeProbAndCountArrays();
+  launchChildren();
+
+  //  II.C.  Send initial signals:
+  <strong>// YOUR CODE HERE</strong>
+  signalChild(rand() % NUM_CHILDREN,lastSignal);
+
+  //  II.D.  Do the program:
+  while  (shouldRun)
+    sleep(1);
+
+  //  II.E.  Tell children to stop:
+  tellChildrenToStop();
+
+  //  III.  Finished:
+  return(EXIT_SUCCESS);
+}
+      </pre>
+      <table border="1">
+	<tr>
+	  <th>Type:</th>
+	  <th>Name:</th>
+	  <th>Purpose:</th>
+	</tr>
+	<tr>
+	  <td>Array of <code>pid_t</code></td>
+	  <td><code>childPidArray</code></td>
+	  <td>Holds the process ids of the children</td>
+	</tr>
+	<tr>
+	  <td>Array of <code>float</code></td>
+	  <td><code>probabilityArray</code></td>
+	  <td>Holds the probability that each child process will flip its signal.</td>
+	</tr>
+	<tr>
+	  <td><code>int</code></td>
+	  <td><code>shouldRun</code></td>
+	  <td>
+	    Holds <code>1</code> while the program should still run,
+	    of <code>0</code> otherwise.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>int</code></td>
+	  <td><code>lastSignal</code></td>
+	  <td>
+	    Holds either <code>SIGUSR1</code> or <code>SIGUSR2</code>,
+	    whichever was the last signal that was sent.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>sigAlarmHandler(int sigNum)</code></td>
+	  <td>
+	    Tells this process to stop
+	    (you may want to change <code>shouldRun</code>!)
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>signalChild(int childIndex, int sigNum)</code></td>
+	  <td>
+	    Sends the child indexed by <code>childIndex</code>
+	    the signal <code>sigNum</code>.
+	    (You may want to use <code>childPidArray[]</code>!)
+	  </td>
+	</tr>
+	<tr>
+	  <td colspan="3">
+	    You will want either 1 or 2 advanced handlers to handle
+	    <code>SIGUSR1</code> and <code>SIGUSR2</code>.
+	    See below.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>installSignalHandlers ()</code></td>
+	  <td>
+	    Installs all signal handlers.
+	    <em>Be careful!</em>
+	    Some are simple, some are advanced.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>initializeProbAndCountArrays ()</code></td>
+	  <td>
+	    Initializes <code>probabilityArray[]</code> and <code>countArray[]</code>.
+	    Already done for you.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>launchChildren ()</code></td>
+	  <td>
+	    Makes all children.
+	    Their process ids are placed in <code>childPidArray[]</code>.
+	    All children run <code>CHILD_PROCESS</code>,
+	    and are given their flip probability as a string on the command line.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>tellChildrenToStop ()</code></td>
+	  <td>
+	    Sends <code>SIGTERM</code> to all child processes.
+	    Also prints out their flip probability and how many times they flipped their signal.
+	    (<em>Important!</em> Do not leave any Zombies, now!)
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>int</code></td>
+	  <td><code>main ()</code></td>
+	  <td>
+	    Runs the program (silly!)
+	  </td>
+	</tr>
+      </table>
+      <ol type="a">
+	<li>
+	  <code>sigAlarmHandler()</code>
+	  <p>
+	    Change <code>shouldRun</code> so that this program leaves the <code>while</code> loop and <code>main()</code>, and quits.
+	  </p>
+	</li>
+	<li>
+	  <code>signalChild()</code>
+	  <p>
+	    Make this function send signal <code>sigNum</code> to the child indexed by <code>childIndex</code>.
+	  </p>
+	</li>
+	<li>
+	  <p>Either 1 or 2 functions to handle <code>SIGUSR1</code> and <code>SIGUSR2</code></p>
+	  <p>
+	    These function(s) must be advanced handlers.
+	    It/They must:
+	    <ul>
+	      <li>Use <code>childPidArray[]</code> to find the index of the child.  (Call it <code>childIndex</code>.)</li>
+	      <li>Increment <code>countArray[childIndex]</code> if the signal that was receive was not <code>lastSignal</code></li>
+	      <li>
+		Do this:
+<pre>
+  int	nextChildIndex;
+
+  printf(&quot;Received %s from %d\n\n&quot;,
+  	 ((sigNum == SIGUSR1) ? &quot;SIGUSR1&quot; : &quot;SIGUSR2&quot;),
+	 childIndex
+	);
+
+  do
+  {
+    nextChildIndex	= rand() % NUM_CHILDREN;
+  }
+  while  (nextChildIndex == childIndex);
+
+  lastSignal	= <em>theSignalThatWasJustReceived</em>;
+  signalChild(nextChildIndex,lastSignal);
+</pre>
+	      </li>
+	    </ul>
+	  </p>
+	</li>
+	<li>
+	  <code>installSignalHandlers()</code>
+	  <p>
+	    Installs all signal handlers.
+	    <em>Be careful!</em>
+	    Some are simple, some are advanced.
+	  </p>
+	</li>
+	<li>
+	  <code>initializeProbAndCountArrays()</code>
+	  <p>
+	    Initializes <code>probabilityArray[]</code> and <code>countArray[]</code>.
+	    Already done for you.
+	  </p>
+	</li>
+	<li>
+	  <code>launchChildren()</code>
+	  <p>
+	    Have a loop that makes <code>NUM_CHILDREN</code> child processes
+	    and puts their process ids in <code>childPidArray[]</code>.
+	    Each child process should run <code>CHILD_PROCESS</code>
+	    with the flip probability given as a command line argument.
+	    To convert the floating point number to a string, say:
+<pre>
+char	text[TEXT_LEN];
+
+snprintf(text,TEXT_LEN,&quot;%g&quot;,probabilityArray[index]);
+</pre>
+	  </p>
+	</li>
+	<li>
+	  <code>tellChildrenToStop()</code>
+	  <p>
+	    Has a loop that sends <code>SIGTERM</code> to all child processes.
+	    (<em>Important!</em> Do not leave any Zombies, now!)
+	  </p>
+	</li>
+	<li>
+	  <code>main()</code>
+	  <p>
+	    Mostly written for you <em>except</em> that
+	    you must tell the Operating System to send <code>SIGALRM</code>
+	    to you <code>NUM_SECS_TO_RUN</code> seconds in the future.
+	  </p>
+	</li>
+      </ol>
+    </lI>
+    <p/>
+
+    <li>
+      <h5>responder.c</h5>
+      <pre>
+/*-------------------------------------------------------------------------*
+ *---									---*
+ *---		responder.c						---*
+ *---									---*
+ *---	    This file defines a program that responds to SIGUSR1 and	---*
+ *---	SIGUSR2 from its parents.					---*
+ *---									---*
+ *---	----	----	----	----	----	----	----	----	---*
+ *---									---*
+ *---	Version 1a					Joseph Phillips	---*
+ *---									---*
+ *-------------------------------------------------------------------------*/
+
+/*
+ *	Compile with:
+ *	$ gcc responder.c -o responder
+ */
+#include	&lt;stdlib.h&gt;
+#include	&lt;stdio.h&gt;
+#include	&lt;string.h&gt;
+#include	&lt;signal.h&gt;
+#include	&lt;unistd.h&gt;
+#include	&lt;wait.h&gt;
+
+
+int		shouldRun	= 1;
+
+float		flipProb	= 0.0;
+
+void		sigTermHandler	(int		sigNum
+				)
+{
+  <strong>// YOUR CODE HERE</strong>
+}
+
+
+<strong>// YOUR CODE HERE</strong>
+
+
+int		main		(int		argc,
+				 char*		argv[]
+				)
+{
+  struct sigaction	act;
+
+  srand(getpid());
+
+  <strong>// YOUR CODE HERE</strong>
+
+
+  while  (shouldRun)
+    sleep(1);
+
+  return(EXIT_SUCCESS);
+}
+     </pre>
+      <table border="1">
+	<tr>
+	  <th>Type:</th>
+	  <th>Name:</th>
+	  <th>Purpose:</th>
+	</tr>
+	<tr>
+	  <td><code>int</code></td>
+	  <td><code>shouldRun</code></td>
+	  <td>
+	    Holds <code>1</code> while the program should still run,
+	    of <code>0</code> otherwise.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>float</code></td>
+	  <td><code>flipProb</code></td>
+	  <td>
+	    Holds the probability that this process will flip
+	    a <code>SIGUSR1</code> to <code>SIGUSR2</code>, or vice versa.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>void</code></td>
+	  <td><code>sigTermHandler(int sigNum)</code></td>
+	  <td>
+	    Tells this process to stop
+	    (you may want to change <code>shouldRun</code>!)
+	  </td>
+	</tr>
+	<tr>
+	  <td colspan="3">
+	    You will want either 1 or 2 simple handlers to handle
+	    <code>SIGUSR1</code> and <code>SIGUSR2</code>.
+	    See below.
+	  </td>
+	</tr>
+	<tr>
+	  <td><code>int</code></td>
+	  <td><code>main ()</code></td>
+	  <td>
+	    Runs the program (silly!)
+	  </td>
+	</tr>
+      </table>
+      <ol type="a">
+	<li>
+	  <code>sigTermHandler()</code>
+	  <p>
+	    Change <code>shouldRun</code> so that this program leaves the <code>while</code> loop and <code>main()</code>, and quits.
+	  </p>
+	</li>
+	<li>
+	  <p>
+	    Write 1 or 2 simple signal handlers to handle <code>SIGUSR1</code> and <code>SIGUSR2</code>.
+	  </p>
+	  <ul>
+	    <li>
+	      Do this:
+<pre>
+float	thisProb= ((float)(rand() % 256)) / 256.0;
+</pre>
+	    </li>
+	    <li>
+	      If <code>(flipProb &gt; thisProb)</code>
+	      then the signal has flipped.
+	      Print <code>&quot;Flipped!\n&quot;</code> and
+	      send the opposite signal to the parent process.
+	    </li>
+	    <li>
+	      If <code>(flipProb &lt;= thisProb)</code>
+	      then the signal has not flipped.
+	      Print <code>&quot;Same\n&quot;</code> and
+	      send the same signal to the parent process.
+	    </li>
+	  </ul>
+	</li>
+	<li>
+	  <code>main()</code>
+	  <p>
+	    This should do several things:
+	    <ul>
+	      <li>
+		Make sure that the command line argument for the flip probability is given on the command line.
+		If it is not, then do:
+<code>
+fprintf(stderr,&quot;Missing probability argument&quot;);
+exit(EXIT_FAILURE);
+</code>	  
+	      </li>
+	      <li>
+		Convert the command line argument from a string into a <code>float</code>, and put its value in <code>flipProb</code>.
+		The value of <code>flipProb</code> should be between <code>[0.0 .. 1.0]</code>.
+		If it is not, then do:
+<code>
+fprintf(stderr,&quot;Bad probability argument&quot;);
+exit(EXIT_FAILURE);
+</code>	  
+	      </li>
+	      <li>
+		Install all signal handlers.
+	      </li>
+	    </ul>
+	  </p>
+	</li>
+      </ol>
+    </lI>
+    <p/>
+  </ol>
+  <p/>
+
+  <h4>Sample output:</h4>
+  <p>
+    <pre>
+$ <strong>./caller </strong>
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 0
+Same
+Received SIGUSR2 from 0
+
+Sending SIGUSR2 to 3
+Same
+Received SIGUSR2 from 3
+
+Sending SIGUSR2 to 1
+Flipped!
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Same
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 0
+Flipped!
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Same
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 0
+Flipped!
+Received SIGUSR2 from 0
+
+Sending SIGUSR2 to 3
+Same
+Received SIGUSR2 from 3
+
+Sending SIGUSR2 to 0
+Same
+Received SIGUSR2 from 0
+
+Sending SIGUSR2 to 3
+Same
+Received SIGUSR2 from 3
+
+Sending SIGUSR2 to 1
+Flipped!
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 2
+Flipped!
+Received SIGUSR2 from 2
+
+Sending SIGUSR2 to 3
+Same
+Received SIGUSR2 from 3
+
+Sending SIGUSR2 to 2
+Same
+Received SIGUSR2 from 2
+
+Sending SIGUSR2 to 1
+Flipped!
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 1
+Same
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 0
+Same
+Received SIGUSR2 from 0
+
+Sending SIGUSR2 to 1
+Flipped!
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Same
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 0
+Same
+Received SIGUSR2 from 0
+
+Sending SIGUSR2 to 1
+Flipped!
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 3
+Same
+Received SIGUSR1 from 3
+
+Sending SIGUSR1 to 2
+Same
+Received SIGUSR1 from 2
+
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 0
+Same
+Received SIGUSR2 from 0
+
+Sending SIGUSR2 to 2
+Same
+Received SIGUSR2 from 2
+
+Sending SIGUSR2 to 1
+Same
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 2
+Same
+Received SIGUSR2 from 2
+
+Sending SIGUSR2 to 1
+Flipped!
+Received SIGUSR1 from 1
+
+Sending SIGUSR1 to 0
+Same
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 0
+Flipped!
+Received SIGUSR1 from 0
+
+Sending SIGUSR1 to 1
+Flipped!
+Received SIGUSR2 from 1
+
+Sending SIGUSR2 to 2
+Child 0: prob 0.140625, count 3
+Child 1: prob 0.675781, count 13
+Same
+Received SIGUSR2 from 2
+
+Sending SIGUSR2 to 1
+Child 2: prob 0.167969, count 1
+Child 3: prob 0, count 0
+    </pre>
+  </p>
+ </body>
+</html>
+

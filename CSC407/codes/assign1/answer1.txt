@@ -1,0 +1,61 @@
+-- Kun Shan
+
+3. Timing: Part 1
+    a. 10.36 seconds
+    b. 0.02 seconds
+
+4. Timing: Part 2
+    a. 5.21 seconds
+    b. 0.01 seconds
+
+5. Algorithm choice vs. Compiler optimization
+    A good algorithm and data-structure optimized with -O0
+
+    Because quickSort has O(nlogn) but insertion Sort has O(n^2) time complexity,
+    even though bad algorithm has a complier optimization, but algorithm complexity
+    is the decisive factor.
+
+6. Parts of an executable
+------------------------------------------------------------------------------------------------
+    Question |  Command           |  Result
+------------------------------------------------------------------------------------------------
+             |                    | Contents of section .rodata:
+             |                    | 401128 01000200 00000000 00000000 00000000  ................
+             |                    | 401138 506c6561 73652065 6e746572 20257320  Please enter %s 
+             |  objdump -s -j     | 401148 2825642d 2564293a 20006e75 6d626572  (%d-%d): .number
+    A        |  .rodata assign1-0 | 401158 206f6620 73747269 6e677300 6c656e67   of strings.leng
+             |                    | 401168 7468206f 66206561 63682073 7472696e  th of each strin
+             |                    | 401178 67000000 00000000 3120666f 7220696e  g.......1 for in
+             |                    | 401188 73657274 696f6e20 736f7274 206f7220  sertion sort or 
+             |                    | 401198 3220666f 72207175 69636b73 6f727400  2 for quicksort.
+------------------------------------------------------------------------------------------------
+             |                    | assign1-0:     file format elf64-x86-64
+             |                    | 
+             |                    | Contents of section .text:
+    B        |  objdump -s -j     | 400810 f30f1efa 31ed4989 d15e4889 e24883e4  ....1.I..^H..H..
+             |  .text assign1-0   | 400820 f0505449 c7c0f010 400048c7 c1801040  .PTI....@.H....@
+             |                    | ... ...
+             |                    | 
+             |                    | in 400ba6 <releaseMem>
+------------------------------------------------------------------------------------------------
+             |                    | assign1-0:     file format elf64-x86-64
+             |                    |
+             |                    | SYMBOL TABLE:
+             |                    | 0000000000602080 l    d  .bss   0000000000000000              .bss
+             |                    | 0000000000602088 l     O .bss   0000000000000004              called.5066
+             | objdump -t -j      | 000000000060208c l     O .bss   0000000000000001              completed.7307
+    C        | .bss assign1-0     | 0000000000602080 g     O .bss   0000000000000008              stdin@@GLIBC_2.2.5
+             |                    | 0000000000602090 g     O .bss   0000000000000004              strLen
+             |                    | 0000000000602098 g       .bss   0000000000000000              _end
+             |                    | 000000000060207c g       .bss   0000000000000000              __bss_start
+             |                    | 
+             |                    | in 602090 <strLen>
+------------------------------------------------------------------------------------------------
+             |  It can not be found in binary file.
+    D        |  All local variable name has been replaced in assembly either in RAM or registers.
+             |  In this program, it can be find in RAM(stack).
+------------------------------------------------------------------------------------------------
+
+7. Compiler optimizations
+    1. Some variables are kept in registers rather than in RAM. e.g. in swap()
+    2. Compute common expressions once. e.g. in insertionSort() move "arrayLen-1" to outer loop
